@@ -10,8 +10,11 @@ import android.widget.Toast
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import com.example.vougecycle.databinding.ActivityExploreBinding
+import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 
 class ExploreActivity : BaseActivity() {
 
@@ -21,6 +24,7 @@ class ExploreActivity : BaseActivity() {
     private lateinit var adapter: ProductAdapter
     private val allProducts = mutableListOf<Product>()
     private val visibleProducts = mutableListOf<Product>()
+    private val favouriteIds = mutableSetOf<String>()
     private var activeChip: TextView? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -32,20 +36,19 @@ class ExploreActivity : BaseActivity() {
         setupChips()
         setupSearch()
         setupBottomNav()
-        fetchProducts()
     }
 
     override fun onResume() {
         super.onResume()
         fetchProducts()
+        fetchFavouriteIds()
     }
 
     private fun setupGrid() {
         adapter = ProductAdapter(
             products = visibleProducts,
-            onHeartClick = { product ->
-                Toast.makeText(this, "Favourited: ${product.title}", Toast.LENGTH_SHORT).show()
-            },
+            favouriteIds = favouriteIds,
+            onHeartClick = { product -> toggleFavourite(product) },
             onCardClick = { product ->
                 val intent = Intent(this, ProductDetailActivity::class.java).apply {
                     putExtra(ProductDetailActivity.EXTRA_ID, product.id)
@@ -118,11 +121,59 @@ class ExploreActivity : BaseActivity() {
                 allProducts.clear()
                 allProducts.addAll(products)
 
-                applyFilter("", "All")
+                val currentChip = activeChip?.text?.toString() ?: "All"
+                applyFilter(binding.etSearch.text.toString(), currentChip)
 
             } catch (e: Exception) {
                 Log.e("Supabase", "Explore fetch failed: ${e.message}", e)
                 Toast.makeText(this@ExploreActivity, "Failed to load products", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun fetchFavouriteIds() {
+        lifecycleScope.launch {
+            try {
+                val user = Supabase.client.auth.currentUserOrNull() ?: return@launch
+                val favResult = Supabase.client.postgrest
+                    .from("favourites")
+                    .select { filter { eq("user_id", user.id) } }
+
+                val favRows = favResult.decodeList<FavouriteRow>()
+                favouriteIds.clear()
+                favouriteIds.addAll(favRows.map { it.product_id })
+                adapter.notifyDataSetChanged()
+            } catch (e: Exception) {
+                Log.e("Supabase", "Failed to load favourites", e)
+            }
+        }
+    }
+
+    private fun toggleFavourite(product: Product) {
+        val user = Supabase.client.auth.currentUserOrNull() ?: return
+        val isCurrentlyFav = favouriteIds.contains(product.id)
+
+        lifecycleScope.launch {
+            try {
+                if (isCurrentlyFav) {
+                    Supabase.client.postgrest.from("favourites").delete {
+                        filter {
+                            eq("user_id", user.id)
+                            eq("product_id", product.id)
+                        }
+                    }
+                    favouriteIds.remove(product.id)
+                } else {
+                    val newRow = buildJsonObject {
+                        put("user_id", JsonPrimitive(user.id))
+                        put("product_id", JsonPrimitive(product.id))
+                    }
+                    Supabase.client.postgrest.from("favourites").insert(newRow)
+                    favouriteIds.add(product.id)
+                }
+                adapter.notifyDataSetChanged()
+            } catch (e: Exception) {
+                Toast.makeText(this@ExploreActivity, "Failed to update favourite", Toast.LENGTH_SHORT).show()
             }
         }
     }

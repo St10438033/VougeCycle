@@ -45,6 +45,10 @@ class ShopProfileActivity : BaseActivity() {
             Toast.makeText(this, "Add description coming soon", Toast.LENGTH_SHORT).show()
         }
 
+        binding.btnViewFavourites.setOnClickListener {
+            startActivity(Intent(this, FavouritesActivity::class.java))
+        }
+
         setupShopGrid()
         setupBottomNav()
     }
@@ -57,6 +61,7 @@ class ShopProfileActivity : BaseActivity() {
 
                 val adapter = ProductAdapter(
                     products = products,
+                    favouriteIds = emptySet(),
                     onHeartClick = { product ->
                         Toast.makeText(this@ShopProfileActivity, "Favourited: ${product.title}", Toast.LENGTH_SHORT).show()
                     },

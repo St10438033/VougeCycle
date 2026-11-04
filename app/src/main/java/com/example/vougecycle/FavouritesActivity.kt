@@ -6,7 +6,7 @@ import android.util.Log
 import android.widget.Toast
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
-import com.example.vougecycle.databinding.ActivityExploreBinding // We reuse the Explore layout!
+import com.example.vougecycle.databinding.ActivityExploreBinding
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.launch
@@ -15,7 +15,7 @@ import kotlinx.serialization.json.buildJsonObject
 
 class FavouritesActivity : BaseActivity() {
 
-    override val selectedTab: Tab = Tab.PROFILE // Or wherever you want the nav to highlight
+    override val selectedTab: Tab = Tab.PROFILE
 
     private lateinit var binding: ActivityExploreBinding
     private lateinit var adapter: ProductAdapter
@@ -24,12 +24,12 @@ class FavouritesActivity : BaseActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Reuse the explore layout, but hide the search bar and chips
+        // Reuse the Explore layout, but hide the search bar and chips
         binding = ActivityExploreBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
         binding.etSearch.visibility = android.view.View.GONE
-        binding.chipAll.parent.let { (it as android.view.View).visibility = android.view.View.GONE }
+        (binding.chipAll.parent as android.view.View).visibility = android.view.View.GONE
 
         setupGrid()
         setupBottomNav()
@@ -42,7 +42,17 @@ class FavouritesActivity : BaseActivity() {
             favouriteIds = favouriteIds,
             onHeartClick = { product -> toggleFavourite(product) },
             onCardClick = { product ->
-                // Open detail activity (same as Home)
+                // Open detail activity
+                val intent = Intent(this, ProductDetailActivity::class.java).apply {
+                    putExtra(ProductDetailActivity.EXTRA_ID, product.id)
+                    putExtra(ProductDetailActivity.EXTRA_TITLE, product.title)
+                    putExtra(ProductDetailActivity.EXTRA_PRICE, product.priceFormatted())
+                    putExtra(ProductDetailActivity.EXTRA_IMAGE_URL, product.imageUrl)
+                    putExtra(ProductDetailActivity.EXTRA_SOLD, product.isSold)
+                    putExtra(ProductDetailActivity.EXTRA_DESCRIPTION, product.description)
+                    putExtra(ProductDetailActivity.EXTRA_CONDITION, product.condition)
+                }
+                startActivity(intent)
             }
         )
         binding.rvExplore.layoutManager = GridLayoutManager(this, 2)
@@ -55,14 +65,10 @@ class FavouritesActivity : BaseActivity() {
                 val user = Supabase.client.auth.currentUserOrNull()
                 if (user == null) return@launch
 
-                // 1. Get the IDs of the favourited products for this user
                 val favResult = Supabase.client.postgrest
                     .from("favourites")
-                    .select {
-                        filter { eq("user_id", user.id) }
-                    }
+                    .select { filter { eq("user_id", user.id) } }
 
-                // Parse just the product_ids
                 val favRows = favResult.decodeList<FavouriteRow>()
                 favouriteIds.clear()
                 favouriteIds.addAll(favRows.map { it.product_id })
@@ -72,13 +78,9 @@ class FavouritesActivity : BaseActivity() {
                     return@launch
                 }
 
-                // 2. Fetch the full product data for those IDs
-                // Supabase allows `.in` filtering
                 val productsResult = Supabase.client.postgrest
                     .from("products")
-                    .select {
-                        filter { isIn("id", favouriteIds.toList()) }
-                    }
+                    .select { filter { isIn("id", favouriteIds.toList()) } }
 
                 val products = productsResult.decodeList<Product>()
                 visibleProducts.clear()
@@ -99,7 +101,6 @@ class FavouritesActivity : BaseActivity() {
         lifecycleScope.launch {
             try {
                 if (isCurrentlyFav) {
-                    // Remove from DB
                     Supabase.client.postgrest.from("favourites").delete {
                         filter {
                             eq("user_id", user.id)
@@ -109,14 +110,12 @@ class FavouritesActivity : BaseActivity() {
                     favouriteIds.remove(product.id)
                     visibleProducts.removeAll { it.id == product.id }
                 } else {
-                    // Add to DB
                     val newRow = buildJsonObject {
                         put("user_id", JsonPrimitive(user.id))
                         put("product_id", JsonPrimitive(product.id))
                     }
                     Supabase.client.postgrest.from("favourites").insert(newRow)
                     favouriteIds.add(product.id)
-                    visibleProducts.add(product)
                 }
                 adapter.notifyDataSetChanged()
             } catch (e: Exception) {
@@ -126,7 +125,6 @@ class FavouritesActivity : BaseActivity() {
     }
 }
 
-// Helper class to parse the database response
 @kotlinx.serialization.Serializable
 data class FavouriteRow(
     val id: String,
