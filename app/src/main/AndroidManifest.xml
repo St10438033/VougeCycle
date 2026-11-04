@@ -63,7 +63,11 @@
         <activity android:name=".InboxActivity"
             android:exported="false"/>
 
-        <activity android:name=".FavouritesActivity" android:exported="false" />
+        <activity android:name=".FavouritesActivity"
+            android:exported="false" />
+
+        <activity android:name=".PurchasesActivity"
+            android:exported="false" />
 
     </application>
 

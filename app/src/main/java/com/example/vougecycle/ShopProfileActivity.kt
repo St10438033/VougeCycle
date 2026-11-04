@@ -49,6 +49,10 @@ class ShopProfileActivity : BaseActivity() {
             startActivity(Intent(this, FavouritesActivity::class.java))
         }
 
+        binding.btnViewPurchases.setOnClickListener {
+            startActivity(Intent(this, PurchasesActivity::class.java))
+        }
+
         setupShopGrid()
         setupBottomNav()
     }
