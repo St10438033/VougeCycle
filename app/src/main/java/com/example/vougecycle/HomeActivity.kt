@@ -47,7 +47,7 @@ class HomeActivity : BaseActivity() {
     private fun setupProductGrid() {
         adapter = ProductAdapter(
             products = visibleProducts,
-            favouriteIds = favouriteIds,
+            favouriteIds = emptySet(),
             onHeartClick = { product -> toggleFavourite(product) },
             onCardClick = { product ->
                 val intent = Intent(this, ProductDetailActivity::class.java).apply {
