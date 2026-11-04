@@ -10,6 +10,8 @@ import coil.load
 
 class ProductAdapter(
     private val products: List<Product>,
+    // Pass in a set of product IDs that the user has favourited
+    private val favouriteIds: Set<String>,
     private val onHeartClick: (Product) -> Unit = {},
     private val onCardClick: (Product) -> Unit = {}
 ) : RecyclerView.Adapter<ProductAdapter.ProductViewHolder>() {
@@ -34,15 +36,19 @@ class ProductAdapter(
         holder.tvTitle.text = product.title
         holder.tvPrice.text = product.priceFormatted()
 
-        // Load image (Coil handles null/URL gracefully)
         holder.ivProduct.load(product.imageUrl) {
             crossfade(true)
             placeholder(R.color.vc_grey_bg)
             error(R.color.vc_grey_bg)
         }
 
-        // SOLD badge
         holder.tvSoldBadge.visibility = if (product.isSold) View.VISIBLE else View.GONE
+
+        // Set heart icon based on whether the ID is in our favourite set
+        val isFav = favouriteIds.contains(product.id)
+        holder.ivHeart.setImageResource(
+            if (isFav) R.drawable.ic_heart_filled else R.drawable.ic_heart_outline
+        )
 
         holder.ivHeart.setOnClickListener { onHeartClick(product) }
         holder.itemView.setOnClickListener { onCardClick(product) }

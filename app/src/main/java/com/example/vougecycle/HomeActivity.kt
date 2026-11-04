@@ -42,6 +42,7 @@ class HomeActivity : BaseActivity() {
     private fun setupProductGrid() {
         adapter = ProductAdapter(
             products = visibleProducts,
+            favouritesIds = emptySet(),
             onHeartClick = { product ->
                 Toast.makeText(this, "Favourited: ${product.title}", Toast.LENGTH_SHORT).show()
             },
