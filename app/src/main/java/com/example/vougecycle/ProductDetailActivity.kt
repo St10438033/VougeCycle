@@ -4,8 +4,14 @@ import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import coil.load
 import com.example.vougecycle.databinding.ActivityProductDetailBinding
+import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.postgrest.postgrest
+import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 
 class ProductDetailActivity : AppCompatActivity() {
 
@@ -26,6 +32,7 @@ class ProductDetailActivity : AppCompatActivity() {
         binding = ActivityProductDetailBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        val productId = intent.getStringExtra(EXTRA_ID) ?: ""
         val title = intent.getStringExtra(EXTRA_TITLE) ?: "Product"
         val price = intent.getStringExtra(EXTRA_PRICE) ?: "R 0.00"
         val imageUrl = intent.getStringExtra(EXTRA_IMAGE_URL)
@@ -69,8 +76,56 @@ class ProductDetailActivity : AppCompatActivity() {
         }
 
         binding.btnBuy.setOnClickListener {
-            if (sold) Toast.makeText(this, "This item has already been sold", Toast.LENGTH_SHORT).show()
-            else Toast.makeText(this, "Purchase flow coming soon", Toast.LENGTH_LONG).show()
+            if (sold) {
+                Toast.makeText(this, "This item has already been sold", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            val user = Supabase.client.auth.currentUserOrNull()
+            if (user == null) {
+                Toast.makeText(this, "You must be logged in to buy", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            val priceDouble = price.replace("R ", "").replace(",", "").toDoubleOrNull() ?: 0.0
+
+            binding.btnBuy.isEnabled = false
+            binding.btnBuy.text = "Processing..."
+
+            lifecycleScope.launch {
+                try {
+                    // 1. Fetch the product to get the seller_id
+                    val productRow = Supabase.client.postgrest
+                        .from("products")
+                        .select { filter { eq("id", productId) } }
+                        .decodeSingle<Product>()
+
+                    // 2. Insert the order
+                    val newOrder = buildJsonObject {
+                        put("buyer_id", JsonPrimitive(user.id))
+                        put("seller_id", JsonPrimitive(productRow.sellerId))
+                        put("product_id", JsonPrimitive(productId))
+                        put("price", JsonPrimitive(priceDouble))
+                        put("status", JsonPrimitive("pending"))
+                    }
+
+                    Supabase.client.postgrest.from("orders").insert(newOrder)
+
+                    // 3. Mark product as sold
+                    val updateProduct = buildJsonObject { put("is_sold", JsonPrimitive(true)) }
+                    Supabase.client.postgrest.from("products").update(updateProduct) {
+                        filter { eq("id", productId) }
+                    }
+
+                    Toast.makeText(this@ProductDetailActivity, "Order placed successfully!", Toast.LENGTH_LONG).show()
+                    finish()
+
+                } catch (e: Exception) {
+                    binding.btnBuy.isEnabled = true
+                    binding.btnBuy.text = "Buy now"
+                    Toast.makeText(this@ProductDetailActivity, "Failed to buy: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
         }
     }
 }
